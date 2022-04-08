@@ -1,27 +1,101 @@
 /* eslint-disable consistent-return */
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const ErrorHandler = require('../lib/errorHandler');
 const sendToken = require('../lib/jwt');
 const sendEmail = require('../lib/sendEmail');
 const catchAsyncErrors = require('../middleware/catchAsyncErrors');
 const Users = require('../models/Users');
+const generate = require('../middleware/generate');
 
 exports.registerUser = catchAsyncErrors(async (req, res, next) => {
     const { name, email, password } = req.body;
 
+    const existingUser = await Users.findOne({ email, status: 'approve' });
+    // const pendingUser = await Users.findOne({ email, status: 'pending' });
     const user = await Users.findOne({ email });
 
-    if (user) {
+    console.log(user, existingUser);
+
+    if (existingUser) {
         return next(new ErrorHandler('User already exist '));
     }
 
-    const newUser = await Users.create({
-        name,
-        email,
-        password,
-    });
+    // hashing the otp
+    // console.log(gt, email, 'haol');
+    const x = generate.generateOtp();
+    const otp = await bcrypt.hash(x, 10);
+    try {
+        if (!user) {
+            console.log('heoll');
+            const newUser = await Users.create({
+                email,
+                password,
+                name,
+                otp,
+            });
 
-    sendToken(newUser, res, 201);
+            await sendEmail({
+                email: newUser.email,
+                subject: 'Issue Tracker Password Recovery',
+                message: `Your new user OTP for Email Verification is ${x}`,
+            });
+            res.status(200).json({
+                success: true,
+                message: `Email ${newUser.email} sent to  successfully for new user Otp`,
+            });
+        } else {
+            const refreshOtp = await Users.updateOne({ email, otp });
+            console.log(refreshOtp, 'refrest');
+            await sendEmail({
+                email: req.body.email,
+                subject: 'Issue Tracker Password Recovery',
+                message: `Your refresh OTP for Email Verification is '${x}'`,
+            });
+
+            res.status(200).json({
+                success: true,
+                message: `Email ${email} sent to  successfully refresh otp`,
+            });
+        }
+        console.log('sendmail', sendEmail);
+    } catch (err) {
+        console.log(err.message);
+        // user.resetPasswordExpire = undefined;
+        user[0].otp = undefined;
+
+        await user.save({ validateBeforeSave: false });
+    }
+    // const newUser = await Users.create({
+    //     name,
+    //     email,
+    //     password,
+    // });
+
+    // sendToken(newUser, res, 201);
+});
+// Match OTP
+
+exports.matchOtp = catchAsyncErrors(async (req, res, next) => {
+    const user = await Users.findOne({ email: req.body.email });
+
+    console.log('hlloo ', user);
+
+    const isMatched = await bcrypt.compare(req.body.code, user.otp);
+    console.log(user.otp, 'he', isMatched, 'lam', req.body.code);
+
+    if (!isMatched) {
+        return next(new ErrorHandler('You otp didn not matched'));
+    }
+
+    console.log(isMatched);
+    if (isMatched) {
+        user.otp = undefined;
+        user.status = 'approve';
+        await user.save({ validateBeforeSave: false });
+
+        sendToken(user, res, 200);
+    }
 });
 
 //  Login User

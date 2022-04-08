@@ -18,9 +18,16 @@ const userSchema = new mongoose.Schema({
         required: [true, 'Please Enter your Password'],
         select: false,
     },
+    otp: {
+        type: String,
+    },
     role: {
         type: String,
         default: 'user',
+    },
+    status: {
+        type: String,
+        default: 'pending',
     },
     createdAt: {
         type: Date,
@@ -29,6 +36,8 @@ const userSchema = new mongoose.Schema({
 
     resetPasswordToken: String,
     resetPasswordExpire: Date,
+    verifyOTP: String,
+    resetOTPExpire: Date,
 });
 
 // hashing the password before save to the DB
@@ -78,5 +87,16 @@ userSchema.methods.getResetPasswordToken = function () {
 
     return resetToken;
 };
+// userSchema.methods.getOTP = function () {
+//     // Generating Token
+//     const otp = crypto.randomBytes(20).toString('hex');
+
+//     // Hashing and adding resetPasswordToken to userSchema
+//     this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+//     this.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+
+//     return resetToken;
+// };
 
 module.exports = mongoose.model('Users', userSchema);
